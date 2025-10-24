@@ -114,11 +114,15 @@ class RequireJsConfigReplacer {
     /**
      * @param $configContent
      * @param array $map
-     * @return array|mixed|string|string[]|null
+     * @return array|string|string[]|null
      */
     public function replaceMap($configContent, array $map = []) {
         foreach ($map as $key => $value) {
-            $pattern = '/^[ \t]*["\']?' . preg_quote($key, '/') . '["\']?\s*:\s*["\']' . preg_quote($value, '/') . '["\']\s*(,)?\s*$/m';
+            $pattern = '/^[ \t]*["\']?' .
+                preg_quote($key, '/') .
+                '["\']?\s*:\s*["\']' .
+                preg_quote($value, '/') .
+                '["\']\s*(,)?\s*$/m';
             $configContent = preg_replace($pattern, '', $configContent);
             $this->mapRemovedReferences[$key] = $value;
         }
@@ -128,14 +132,17 @@ class RequireJsConfigReplacer {
     /**
      * @param $configContent
      * @param array $shim
-     * @return array|mixed|string|string[]|null
+     * @return array|string|string[]|null
      */
     public function replaceShim($configContent, array $shim = []) {
         foreach ($shim as $key) {
-            $pattern = '/^[ \t]*["\']?' . preg_quote($key, '/') . '["\']?\s*:\s*(\[[^\]]*\]|\{[^}]*\}|["\'][^"\']*["\'])\s*(,)?\s*$/m';
+            $pattern = '/^[ \t]*["\']?' .
+                preg_quote($key, '/') .
+                '["\']?\s*:\s*(\[[^\]]*\]|\{[^{}]*\}|"(?:[^"\\\\]|\\\\.)*"|\{(?:[^{}]++|(?R))*\})\s*(,)?\s*$/m';
+
             $configContent = preg_replace($pattern, '', $configContent);
         }
-        return $configContent;
+        return preg_replace('/,\s*(\})/', '$1', $configContent);
     }
 
     /**
