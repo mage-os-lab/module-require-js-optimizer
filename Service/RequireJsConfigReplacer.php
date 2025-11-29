@@ -6,11 +6,12 @@ use Magento\Framework\Module\Dir\Reader;
 use Magento\Framework\Filesystem\Io\File;
 use MageOS\RequireJsOptimizer\Helper\Config as ConfigHelper;
 
-class RequireJsConfigReplacer {
+class RequireJsConfigReplacer
+{
 
     public const REQUIREJS_FRONTEND_PATHS = [
         "view/frontend/requirejs-config.js",
-        "view/base/requirejs-config.js"
+        "view/base/requirejs-config.js",
     ];
 
     /**
@@ -52,6 +53,7 @@ class RequireJsConfigReplacer {
      * @var array
      */
     protected array $mapRemovedReferences;
+    private array $deps;
 
     /**
      * @param Reader $moduleReader
@@ -69,7 +71,8 @@ class RequireJsConfigReplacer {
         array $moduleIgnoreList = [],
         array $map = [],
         array $shim = [],
-        array $jsMappings = []
+        array $jsMappings = [],
+        array $deps = []
     ) {
         $this->moduleReader = $moduleReader;
         $this->fileIo = $fileIo;
@@ -79,13 +82,15 @@ class RequireJsConfigReplacer {
         $this->shim = $shim;
         $this->mapRemovedReferences = [];
         $this->jsMappings = $jsMappings;
+        $this->deps = $deps;
     }
 
     /**
      * @param string $filePath
      * @return void
      */
-    public function generateOptimizedFile(string $filePath) {
+    public function generateOptimizedFile(string $filePath)
+    {
 
         if ($this->configHelper->optimizeRequireJsConfig()) {
 
@@ -99,6 +104,8 @@ class RequireJsConfigReplacer {
 
             $configContent = $this->performJsMappings($configContent);
 
+            $configContent = $this->replaceDeps($configContent);
+
             $patternEmptyMap = '/map\s*:\s*{\s*\'\*\'\s*:\s*{\s*}\s*},?/s';
             $configContent = preg_replace($patternEmptyMap, '', $configContent);
 
@@ -111,21 +118,58 @@ class RequireJsConfigReplacer {
         }
     }
 
+    private function replaceDeps(string $configContent)
+    {
+        if (preg_match_all('/deps: \[([^\]]+)\]/msi', $configContent, $matches)) {
+            foreach ($matches[1] as $matchIndex => $match) {
+                $deps = explode(',', $match);
+                $newDeps = [];
+                foreach ($deps as $dep) {
+
+                    $dep = trim($dep);
+                    $dep = trim($dep, '\'"');
+                    if (!array_key_exists($dep, $this->deps)) {
+                        $newDeps[] = "'".$dep."'";
+                        continue;
+                    }
+
+                    if ($this->deps[$dep] === false) {
+                        continue;
+                    }
+
+                    $newDeps[] = "'".$this->deps[$dep]."'";
+                }
+
+                $depSection = $matches[0][$matchIndex];
+                if (empty($newDeps)) {
+                    $configContent = str_replace($depSection, 'deps: []', $configContent);
+                } else {
+                    $newDepSection = 'deps: ['.implode(',', $newDeps).']';
+                    $configContent = str_replace($depSection, $newDepSection, $configContent);
+                }
+            }
+        }
+
+        return $configContent;
+    }
+
     /**
      * @param $configContent
      * @param array $map
      * @return array|string|string[]|null
      */
-    public function replaceMap($configContent, array $map = []) {
+    public function replaceMap($configContent, array $map = [])
+    {
         foreach ($map as $key => $value) {
-            $pattern = '/^[ \t]*["\']?' .
-                preg_quote($key, '/') .
-                '["\']?\s*:\s*["\']' .
-                preg_quote($value, '/') .
+            $pattern = '/^[ \t]*["\']?'.
+                preg_quote($key, '/').
+                '["\']?\s*:\s*["\']'.
+                preg_quote($value, '/').
                 '["\']\s*(,)?\s*$/m';
             $configContent = preg_replace($pattern, '', $configContent);
             $this->mapRemovedReferences[$key] = $value;
         }
+
         return $configContent;
     }
 
@@ -134,14 +178,16 @@ class RequireJsConfigReplacer {
      * @param array $shim
      * @return array|string|string[]|null
      */
-    public function replaceShim($configContent, array $shim = []) {
+    public function replaceShim($configContent, array $shim = [])
+    {
         foreach ($shim as $key) {
-            $pattern = '/^[ \t]*["\']?' .
-                preg_quote($key, '/') .
+            $pattern = '/^[ \t]*["\']?'.
+                preg_quote($key, '/').
                 '["\']?\s*:\s*(\[[^\]]*\]|\{[^{}]*\}|"(?:[^"\\\\]|\\\\.)*"|\{(?:[^{}]++|(?R))*\})\s*(,)?\s*$/m';
 
             $configContent = preg_replace($pattern, '', $configContent);
         }
+
         return preg_replace('/,\s*(\})/', '$1', $configContent);
     }
 
@@ -149,7 +195,8 @@ class RequireJsConfigReplacer {
      * @param $configContent
      * @return array|mixed|string|string[]|null
      */
-    public function replaceIgnoredModules($configContent) {
+    public function replaceIgnoredModules($configContent)
+    {
 
         $collectedConfigs = [];
         foreach ($this->moduleIgnoreList as $moduleName) {
@@ -158,7 +205,7 @@ class RequireJsConfigReplacer {
                 $moduleDir = $this->moduleReader->getModuleDir('', $moduleName);
 
                 foreach (self::REQUIREJS_FRONTEND_PATHS as $configPath) {
-                    $fullPath = $moduleDir . '/' . $configPath;
+                    $fullPath = $moduleDir.'/'.$configPath;
 
                     if (file_exists($fullPath)) {
                         $content = file_get_contents($fullPath);
@@ -203,6 +250,7 @@ class RequireJsConfigReplacer {
                 }
             }
         }
+
         return $configContent;
     }
 
@@ -210,15 +258,16 @@ class RequireJsConfigReplacer {
      * @param $configContent
      * @return array|mixed|string|string[]|null
      */
-    public function performJsMappings($configContent) {
+    public function performJsMappings($configContent)
+    {
         if (!empty($this->jsMappings)) {
             $newConfig = "require.config({\n    map: {\n        '*': {\n";
             foreach ($this->jsMappings as $k => $v) {
                 $newConfig .= "            '$k': '$v',\n";
             }
-            $newConfig = rtrim($newConfig, ",\n") . "\n";
+            $newConfig = rtrim($newConfig, ",\n")."\n";
             $newConfig .= "        }\n    }\n});\n\n";
-            $configContent = $newConfig . $configContent;
+            $configContent = $newConfig.$configContent;
         }
         if (!empty($this->mapRemovedReferences)) {
             $newConfig = "require.config({\n    paths: {\n     ";
@@ -226,10 +275,11 @@ class RequireJsConfigReplacer {
                 $k = str_replace("'", "", $k);
                 $newConfig .= "            '$k': '$v',\n";
             }
-            $newConfig = rtrim($newConfig, ",\n") . "\n";
+            $newConfig = rtrim($newConfig, ",\n")."\n";
             $newConfig .= "    }\n});\n\n";
-            $configContent = $configContent . $newConfig;
+            $configContent = $configContent.$newConfig;
         }
+
         return $configContent;
     }
 }
