@@ -142,7 +142,7 @@ class RequireJsConfigReplacer
 
                 $depSection = $matches[0][$matchIndex];
                 if (empty($newDeps)) {
-                    $configContent = str_replace($depSection, '', $configContent);
+                    $configContent = str_replace($depSection, 'deps: []', $configContent);
                 } else {
                     $newDepSection = 'deps: ['.implode(',', $newDeps).']';
                     $configContent = str_replace($depSection, $newDepSection, $configContent);
