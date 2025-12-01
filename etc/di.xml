@@ -7,4 +7,12 @@
     <type name="Magento\Framework\RequireJs\Config">
         <plugin name="use-optimized-requirejs-build" type="MageOS\RequireJsOptimizer\Plugin\ChangeRequireJsConfig" />
     </type>
+    <type name="MageOS\RequireJsOptimizer\Helper\Config">
+        <arguments>
+            <argument name="allowModuleNames" xsi:type="array">
+                <item name="cms" xsi:type="string">cms</item>
+                <item name="catalog" xsi:type="string">catalog</item>
+            </argument>
+        </arguments>
+    </type>
 </config>
