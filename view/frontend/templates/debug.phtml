@@ -1,0 +1,7 @@
+<script>
+    requirejs.onResourceLoad = function (context, map, depArray) {
+        console.log('Loaded module:', map.id, ' required by:',
+            depArray.map(function (d) { return d.id; })
+        );
+    };
+</script>
